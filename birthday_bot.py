@@ -1,6 +1,118 @@
 from collections import UserDict
 from datetime import datetime, date, timedelta
 
+class AddressBook(UserDict):
+    def add_record(self, record):
+        self.data[record.name.value] = record
+
+    
+    def find(self, name):
+        return self.data.get(name)
+        
+    def delete(self, name):
+        if name in self.data:
+            del self.data[name]
+
+    def __str__(self):
+        return "\n".join(str(record) for record in self.data.values())
+    
+
+    def get_upcoming_birthdays(self, days=7):
+        upcoming_birthdays = []
+        today = date.today()
+
+
+        for name, record in self.data.items():
+            if record.birthday:
+                birthday_date = record.birthday.value
+                birthday_this_year = birthday_date.replace(year=today.year)
+                
+                if birthday_this_year < today:
+                    birthday_this_year = birthday_this_year.replace(year=today.year + 1)
+
+                if 0 <= (birthday_this_year - today).days <= days:
+                    congratulation_date = adjust_for_weekend(birthday_this_year)
+
+                    congratulation_date_str = congratulation_date.strftime("%Y.%m.%d")
+
+                    upcoming_birthdays.append({
+                        "name": name,
+                        "congratulation_date": congratulation_date_str
+                    })
+
+        return upcoming_birthdays
+    
+class Field:
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return str(self.value)
+    
+class Birthday(Field):
+    def __init__(self, value):
+        try:
+            super().__init__(datetime.strptime(value, "%d.%m.%Y").date())
+        except ValueError:
+            raise ValueError("Invalid date format. Use DD.MM.YYYY")
+        
+    def __str__(self):
+        return self.value.strftime("%d.%m.%Y")    
+        
+
+class Name(Field):
+    pass
+
+class Phone(Field):
+    def __init__(self, value):
+        if len(value) != 10 or not value.isdigit():
+            raise ValueError("Phone number must contain 10 digits.")
+        super().__init__(value)
+
+
+class Record:
+    def __init__(self, name):
+        self.name = Name(name)
+        self.phones = []
+        self.birthday = None
+    
+    
+    def add_birthday(self, birthday_str):
+        self.birthday = Birthday(birthday_str)
+        
+    
+    def add_phone(self, phone_number):
+        phone = Phone(phone_number)
+        self.phones.append(phone)
+
+    def remove_phone(self, number):
+        found = self.find_phone(number)
+        if found is not None:
+            self.phones.remove(found)
+            return
+        raise ValueError("Phone not found")
+
+    def edit_phone(self, old, new):
+        found = self.find_phone(old)
+        new_phone = Phone(new)
+        if found is not None:
+            self.phones.remove(found)
+            self.phones.append(new_phone)
+            return
+        raise ValueError("Old phone not found")
+
+    def find_phone(self, number):
+        for phone in self.phones:
+            if phone.value == number:
+                return phone
+        return None
+
+    def __str__(self):
+        phones_str = '; '.join(p.value for p in self.phones)
+        if self.birthday:
+            return f"Contact name: {self.name.value}, phones: {phones_str}, birthday: {self.birthday}"
+        return f"Contact name: {self.name.value}, phones: {phones_str}"
+
 
 def input_error(func):
         def inner(*args, **kwargs):
@@ -84,47 +196,6 @@ def birthdays(args, book):
     return "\n".join(result)
 
 
-
-def main():
-    book = AddressBook()
-
-    def parse_input(user_input):
-        cmd, *args = user_input.split()
-        cmd = cmd.strip().lower()
-        return cmd, *args
-    
-    print("Welcome to the assistant bot!")
-    while True:
-        user_input = input("Enter a command: ")
-        command, *args = parse_input(user_input)
-
-        if command in ["close", "exit"]:
-            print("Good bye!")
-            break
-
-        elif command == "hello":
-            print("How can I help you?")
-
-        elif command == "add":
-            print(add_contact(args, book))
-        elif command == "change":
-            print(change_contact(args, book))
-        elif command == "phone":
-            print(show_phone(args, book))
-        elif command == "all":
-            print(show_all(book))
-        elif command == "add-birthday":
-            print(add_birthday(args, book))
-        elif command == "show-birthday":
-            print(show_birthday(args, book))
-        elif command == "birthdays":
-            print(birthdays(args, book))
-
-        else:
-            print("Invalid command.")
-
-
-
 def string_to_date(date_string):
     return datetime.strptime(date_string, "%Y.%m.%d").date()
 
@@ -153,115 +224,53 @@ def adjust_for_weekend(birthday):
     return birthday
 
 
+def main():
+    book = AddressBook()
 
-class Field:
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return str(self.value)
+    def parse_input(user_input):
+        parts = user_input.strip().split()
+        if not parts:
+            return None, []
+        return parts[0].lower(), parts[1:]
     
-class Birthday(Field):
-    def __init__(self, value):
-        try:
-            self.value = datetime.strptime(value, "%d.%m.%Y").date()
-        except ValueError:
-            raise ValueError("Invalid date format. Use DD.MM.YYYY")
-    def __str__(self):
-        return self.value.strftime("%d.%m.%Y")    
-        
+    print("Welcome to the assistant bot!")
+    while True:
+        user_input = input("Enter a command: ")
+        command, args = parse_input(user_input)
+        if command is None:
+            print("Please enter a command.")
+            continue
 
-class Name(Field):
-    pass
+        if command in ["close", "exit"]:
+            print("Good bye!")
+            break
 
-class Phone(Field):
-    def __init__(self, value):
-        if len(value) != 10 or not value.isdigit():
-            raise ValueError("Phone number must contain 10 digits.")
-        super().__init__(value)
+        elif command == "hello":
+            print("How can I help you?")
 
+        elif command == "add":
+            print(add_contact(args, book))
+        elif command == "change":
+            print(change_contact(args, book))
+        elif command == "phone":
+            print(show_phone(args, book))
+        elif command == "all":
+            print(show_all(book))
+        elif command == "add-birthday":
+            print(add_birthday(args, book))
+        elif command == "show-birthday":
+            print(show_birthday(args, book))
+        elif command == "birthdays":
+            print(birthdays(args, book))
 
-class Record:
-    def __init__(self, name):
-        self.name = Name(name)
-        self.phones = []
-        self.birthday = None
-    
-    
-    def add_birthday(self, birthday_str):
-        self.birthday = Birthday(birthday_str)
-        
-    
-    def add_phone(self, phone_number):
-        phone = Phone(phone_number)
-        self.phones.append(phone)
-
-    def remove_phone(self, number):
-        for phone in self.phones:
-            if phone.value == number:
-                self.phones.remove(phone)
-                return
-        raise ValueError("Phone not found")
-
-    def edit_phone(self, old, new):
-        for phone in self.phones:
-            if phone.value == old:
-                phone.value = new
-                return
-        raise ValueError("Old phone not found")
-
-    def find_phone(self, number):
-        for phone in self.phones:
-            if phone.value == number:
-                return phone
-        return None
-
-    def __str__(self):
-        phones_str = '; '.join(p.value for p in self.phones)
-        if self.birthday:
-            return f"Contact name: {self.name.value}, phones: {phones_str}, birthday: {self.birthday}"
-        return f"Contact name: {self.name.value}, phones: {phones_str}"
-
-class AddressBook(UserDict):
-    def add_record(self, record):
-        self.data[record.name.value] = record
-
-    def get_upcoming_birthdays(self, days=7):
-        upcoming_birthdays = []
-        today = date.today()
+        else:
+            print("Invalid command.")
 
 
-        for name, record in self.data.items():
-            if record.birthday:
-                birthday_date = record.birthday.value
-                birthday_this_year = birthday_date.replace(year=today.year)
-                
-                if birthday_this_year < today:
-                    birthday_this_year = birthday_this_year.replace(year=today.year + 1)
-
-                if 0 <= (birthday_this_year - today).days <= days:
-                    congratulation_date = adjust_for_weekend(birthday_this_year)
-
-                    congratulation_date_str = congratulation_date.strftime("%Y.%m.%d")
-
-                    upcoming_birthdays.append({
-                        "name": name,
-                        "congratulation_date": congratulation_date_str
-                    })
-
-        return upcoming_birthdays
-
-    def find(self, name):
-        return self.data.get(name)
-        
-    def delete(self, name):
-        if name in self.data:
-            del self.data[name]
-
-    def __str__(self):
-        return "\n".join(str(record) for record in self.data.values())
 
 
 
 if __name__ == "__main__":
     main()
+
+
