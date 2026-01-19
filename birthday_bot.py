@@ -24,7 +24,7 @@ class AddressBook(UserDict):
 
         for name, record in self.data.items():
             if record.birthday:
-                birthday_date = record.birthday.value
+                birthday_date = record.birthday.date
                 birthday_this_year = birthday_date.replace(year=today.year)
                 
                 if birthday_this_year < today:
@@ -52,12 +52,18 @@ class Field:
 class Birthday(Field):
     def __init__(self, value):
         try:
-            super().__init__(datetime.strptime(value, "%d.%m.%Y").date())
+            datetime.strptime(value, "%d.%m.%Y")
         except ValueError:
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
         
+        super().__init__(value)
+
+    @property
+    def date(self):
+        return datetime.strptime(self.value, "%d.%m.%Y").date()
+        
     def __str__(self):
-        return self.value.strftime("%d.%m.%Y")    
+        return self.value   
         
 
 class Name(Field):
@@ -124,6 +130,10 @@ def input_error(func):
                 return "Give me name and phone please."
             except IndexError:
                 return "Give me name and phone please."
+            except KeyError:
+                return "Contact not found."
+            except AttributeError:
+                return "Contact not found or has no such attribute."
         return inner
 
 
@@ -131,32 +141,30 @@ def input_error(func):
 def add_contact(args, book):
     name, phone, *_ = args 
     record = book.find(name)
-    message = "Contact updated."
-    if record is None:
-        record = Record(name)
-        book.add_record(record)
-        message = "Contact added."
-    if phone:
+    if record:
         record.add_phone(phone)
-    return message
+        return "Contact updated."
+    else:
+        record = Record(name)
+        record.add_phone(phone)
+        book.add_record(record)
+        return "Contact added."
 
 @input_error
 def change_contact(args, book):
     name, old_phone, new_phone, *_ = args  
     record = book.find(name)
-    if record:
-        record.edit_phone(old_phone, new_phone)
-        return "Phone changed."
-    return f"Contact {name} not found."
+    record.edit_phone(old_phone, new_phone)
+    return "Phone changed."
+    
 
 @input_error
 def show_phone(args, book):
     name, *_ = args  
     record = book.find(name)
-    if record:
-        phones = '; '.join(p.value for p in record.phones)
-        return f"{name}: {phones}"
-    return f"Contact {name} not found."
+    phones = '; '.join(p.value for p in record.phones)
+    return f"{name}: {phones}"
+    
 
 def show_all(book):
     if not book.data:
@@ -169,10 +177,9 @@ def add_birthday(args, book):
         return "Give me name and birthday (DD.MM.YYYY) please."
     name, birthday_str = args
     record = book.find(name)
-    if record:
-        record.add_birthday(birthday_str)
-        return f"Birthday added for {name}."
-    return f"Contact {name} not found."
+    record.add_birthday(birthday_str)
+    return f"Birthday added for {name}."
+   
 
 @input_error
 def show_birthday(args, book):
@@ -180,9 +187,9 @@ def show_birthday(args, book):
         return "Give me name please."
     name = args[0]
     record = book.find(name)
-    if record and record.birthday:
-        return f"{name}'s birthday: {record.birthday}"
-    return f"No birthday for {name}"
+    
+    return f"{name}'s birthday: {record.birthday}"
+    
 
 @input_error
 def birthdays(args, book):
@@ -272,5 +279,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
